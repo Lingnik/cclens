@@ -112,7 +112,7 @@ def cmd_doctor(cfg: config.Config, args: argparse.Namespace) -> int:
         return 0
     db = index.connect(cfg.db_path, read_only=True)
     print()
-    for row in query.doctor(db):
+    for row in query.doctor(db, cfg.enabled_kinds):
         print(f"  {row}")
     db.close()
     return 0

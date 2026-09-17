@@ -68,7 +68,7 @@ class Api:
         return query.stats(self.db)
 
     def doctor(self, _params: dict) -> dict:
-        return {"version": __version__, "lines": query.doctor(self.db),
+        return {"version": __version__, "lines": query.doctor(self.db, self.config.enabled_kinds),
                 "db": str(self.config.db_path),
                 "roots": [{"name": r.name, "path": str(r.path)} for r in self.config.roots]}
 

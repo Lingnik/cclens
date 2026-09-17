@@ -55,6 +55,10 @@ class Config:
         return kind not in self.exclude
 
     @property
+    def enabled_kinds(self) -> tuple[str, ...]:
+        return tuple(k for k in KINDS if self.enabled(k))
+
+    @property
     def loopback_only(self) -> bool:
         return self.host in LOOPBACK
 

@@ -71,16 +71,24 @@ def _in_clause(column: str, values: Sequence[str]) -> tuple[str, list]:
 # --- overview -------------------------------------------------------------
 
 
-def doctor(db: sqlite3.Connection) -> list[str]:
+def doctor(db: sqlite3.Connection, kinds: Sequence[str] = ()) -> list[str]:
+    """One line per source. `kinds` names the sources the configuration has
+    enabled, so a source that found nothing says so rather than going unmentioned
+    and leaving the reader unable to tell a missing directory from a missed one.
+    """
     lines = []
+    found = set()
     for row in db.execute(
         "SELECT source_kind, COUNT(*) files, SUM(lines_ok) ok, SUM(lines_bad) bad,"
         " SUM(missing) missing FROM source_file GROUP BY source_kind ORDER BY source_kind"
     ):
+        found.add(row["source_kind"])
         lines.append(f"{row['source_kind']:11} {row['files']:>4} file(s)"
                      f"  {row['ok'] or 0:>8} entries"
                      f"  {row['bad'] or 0:>5} unparseable"
                      f"  {row['missing'] or 0:>3} gone from disk")
+    for kind in sorted(set(kinds) - found):
+        lines.append(f"{kind:11}    0 file(s)  looked and found none")
     sessions = db.execute("SELECT COUNT(*) FROM session").fetchone()[0]
     agents = db.execute("SELECT COUNT(*) FROM agent").fetchone()[0]
     lines.append(f"{sessions} session(s), {agents} subagent(s)")

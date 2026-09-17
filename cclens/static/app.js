@@ -12,6 +12,7 @@ const toastEl = $("#toast");
 const STREAMS = ["transcript", "hook", "state", "statusline"];
 const BUCKETS = ["under 50us", "50us to 200us", "200us to 1ms", "1ms to 100ms", "over 100ms"];
 const PAGE = 200;
+const SESSION_PAGE = 150;
 
 const state = { rows: [], entry: null, expanded: new Set(), showAllStrings: new Set() };
 
@@ -200,11 +201,54 @@ function card(label, value, small = false) {
 
 // --- view: sessions -------------------------------------------------------
 
-async function viewSessions(r) {
-  const data = await api("/api/sessions", {
-    project: r.q.project, q: r.q.sq, order: r.q.order || "recent",
-    errors: r.q.errors, limit: 150,
+/** Shown wherever hook records would be, when none were indexed. Having none
+ *  is the ordinary case: it means no hook commands are configured. */
+function noHookRecords() {
+  return `<div class="panel">
+    <h2>No hook events indexed</h2>
+    <p class="rail-note">Claude Code can run a command of your choosing on each
+    hook event, before a tool runs, after it returns, when a turn ends. This
+    view reads whatever those commands wrote into the audit directory beside
+    your transcripts.</p>
+    <p class="rail-note">Nothing here means no such commands are set up, which
+    is the normal case. Everything else in cclens works without them.</p>
+  </div>`;
+}
+
+function sessionRow(s) {
+  return `<tr data-session="${esc(s.session_id)}">
+    <td class="nowrap dim" title="${esc(stamp(s.last_ts))}">${esc(ago(s.last_ts))}</td>
+    <td class="trunc title" title="${esc(s.title || s.session_id)}">${esc(s.title || s.session_id)}</td>
+    <td class="trunc dim" title="${esc(s.project || "")}">${esc(s.project || "")}</td>
+    <td class="num">${num(s.entries)}</td>
+    <td class="num">${num(s.tool_calls)}</td>
+    <td class="num">${s.agents ? num(s.agents) : ""}</td>
+    <td class="num ${s.errors ? "" : "dim"}">${s.errors ? num(s.errors) : ""}</td>
+    <td class="num">${money(s.cost)}</td>
+    <td class="trunc dim" title="${esc(s.models || "")}">${esc((s.models || "").replace(/claude-/g, ""))}</td>
+  </tr>`;
+}
+
+function wireSessionRows(scope) {
+  scope.querySelectorAll("tr[data-session]").forEach((tr) => {
+    if (tr.dataset.wired) return;
+    tr.dataset.wired = "1";
+    tr.addEventListener("click", () => { location.hash = href("session", tr.dataset.session); });
   });
+}
+
+/** "150 of 463 indexed" while the table holds less than the corpus. */
+function shownOf(shown, total, where) {
+  const count = shown < total ? `${num(shown)} of ${num(total)}` : num(total);
+  return `${count} indexed${where ? ` in ${esc(where)}` : ""}`;
+}
+
+async function viewSessions(r) {
+  const params = {
+    project: r.q.project, q: r.q.sq, order: r.q.order || "recent",
+    errors: r.q.errors, limit: SESSION_PAGE,
+  };
+  const data = await api("/api/sessions", params);
   const projects = [
     { value: "", label: "All projects", count: data.projects.reduce((a, p) => a + p.n, 0) },
     ...data.projects.map((p) => ({ value: p.project, label: p.project, count: p.n })),
@@ -215,7 +259,7 @@ async function viewSessions(r) {
   content.innerHTML = `<div class="page">
     <div class="page-head">
       <h1>Sessions</h1>
-      <span class="sub">${num(data.total)} indexed${r.q.project ? ` in ${esc(r.q.project)}` : ""}</span>
+      <span class="sub" id="session-count">${shownOf(data.rows.length, data.total, r.q.project)}</span>
       <span class="spacer"></span>
       <div class="controls">
         <input type="search" id="session-q" placeholder="filter title, cwd, id" value="${esc(r.q.sq || "")}">
@@ -234,26 +278,14 @@ async function viewSessions(r) {
         <th class="num">Entries</th><th class="num">Tools</th><th class="num">Agents</th>
         <th class="num">Errors</th><th class="num">Cost</th><th>Models</th>
       </tr></thead>
-      <tbody>${data.rows.map((s) => `
-        <tr data-session="${esc(s.session_id)}">
-          <td class="nowrap dim" title="${esc(stamp(s.last_ts))}">${esc(ago(s.last_ts))}</td>
-          <td class="trunc title" title="${esc(s.title || s.session_id)}">${esc(s.title || s.session_id)}</td>
-          <td class="trunc dim" title="${esc(s.project || "")}">${esc(s.project || "")}</td>
-          <td class="num">${num(s.entries)}</td>
-          <td class="num">${num(s.tool_calls)}</td>
-          <td class="num">${s.agents ? num(s.agents) : ""}</td>
-          <td class="num ${s.errors ? "" : "dim"}">${s.errors ? num(s.errors) : ""}</td>
-          <td class="num">${money(s.cost)}</td>
-          <td class="trunc dim" title="${esc(s.models || "")}">${esc((s.models || "").replace(/claude-/g, ""))}</td>
-        </tr>`).join("")}
-      </tbody>
+      <tbody id="session-rows">${data.rows.map(sessionRow).join("")}</tbody>
     </table>
     ${data.rows.length ? "" : `<div class="empty">No sessions match.</div>`}
+    ${data.rows.length < data.total
+      ? `<button class="load-more" data-offset="${data.rows.length}">Load ${SESSION_PAGE} more</button>` : ""}
   </div>`;
 
-  content.querySelectorAll("tr[data-session]").forEach((tr) => {
-    tr.addEventListener("click", () => { location.hash = href("session", tr.dataset.session); });
-  });
+  wireSessionRows(content);
   content.querySelectorAll("button[data-order]").forEach((b) => {
     b.addEventListener("click", () => go({ order: b.dataset.order }));
   });
@@ -261,6 +293,28 @@ async function viewSessions(r) {
   toggle.addEventListener("click", () => go({ errors: r.q.errors ? "" : "1" }));
   const filter = content.querySelector("#session-q");
   filter.addEventListener("change", () => go({ sq: filter.value }));
+
+  const more = content.querySelector(".load-more");
+  if (more) {
+    more.addEventListener("click", async () => {
+      more.disabled = true;
+      more.textContent = "loading";
+      const next = await api("/api/sessions", { ...params, offset: more.dataset.offset });
+      const holder = content.querySelector("#session-rows");
+      holder.insertAdjacentHTML("beforeend", next.rows.map(sessionRow).join(""));
+      wireSessionRows(content);
+      const shown = holder.querySelectorAll("tr[data-session]").length;
+      content.querySelector("#session-count").textContent =
+        shownOf(shown, next.total, r.q.project);
+      if (shown < next.total && next.rows.length) {
+        more.dataset.offset = shown;
+        more.disabled = false;
+        more.textContent = `Load ${SESSION_PAGE} more`;
+      } else {
+        more.remove();
+      }
+    });
+  }
 }
 
 // --- view: one session ----------------------------------------------------
@@ -384,6 +438,10 @@ async function viewSession(r) {
       session's title history, mode changes and latch state. They are not timeline events.</p>
       ${rowsBlock(s.sidecar, { second: "" })}`;
     wireRows(body);
+    return;
+  }
+  if (tab === "hooks" && !s.hook_entries) {
+    body.innerHTML = noHookRecords();
     return;
   }
 
@@ -679,15 +737,7 @@ async function viewHooks(r) {
         ${r.q.tool ? `<button data-clear="tool">tool ${esc(r.q.tool)} &times;</button>` : ""}
       </div>
     </div>
-    ${data.events.length ? "" : `<div class="panel">
-      <h2>No hook events indexed</h2>
-      <p class="rail-note">Claude Code can run a command of your choosing on each
-      hook event, before a tool runs, after it returns, when a turn ends. This
-      view reads whatever those commands wrote into the audit directory beside
-      your transcripts.</p>
-      <p class="rail-note">Nothing here means no such commands are set up, which
-      is the normal case. Everything else in cclens works without them.</p>
-    </div>`}
+    ${data.events.length ? "" : noHookRecords()}
     ${selected ? `<div class="cards">
       ${card("Fired", num(selected.n))}
       ${card("Mean hook time", micros(selected.avg_us), true)}

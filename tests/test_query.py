@@ -10,6 +10,38 @@ def test_sessions_are_listed_newest_first_with_their_project(indexed):
     assert result["projects"][0]["project"] == "-work-repo"
 
 
+def test_the_session_total_is_the_corpus_not_the_page(indexed):
+    """The list pages by offset while `total` keeps counting the whole match, so
+    a caller can tell it is holding less than everything."""
+    page = query.sessions(indexed, {"limit": 1})
+    assert len(page["rows"]) == 1
+    assert page["total"] == 1
+    beyond = query.sessions(indexed, {"limit": 1, "offset": 1})
+    assert beyond["rows"] == []
+    assert beyond["total"] == 1
+    assert beyond["offset"] == 1
+
+
+def test_doctor_names_a_source_that_found_nothing(transcripts_only):
+    """An enabled source with no files says so. Silence would leave a reader
+    unable to tell an absent directory from one never looked in."""
+    lines = query.doctor(transcripts_only, ("transcript", "audit", "state", "statusline"))
+    assert any(line.startswith("transcript") and "entries" in line for line in lines)
+    for absent in ("audit", "state", "statusline"):
+        assert any(line.startswith(absent) and "looked and found none" in line
+                   for line in lines), absent
+
+
+def test_doctor_stays_quiet_about_a_source_that_was_excluded(transcripts_only):
+    lines = query.doctor(transcripts_only, ("transcript",))
+    assert not any(line.startswith(("audit", "state", "statusline")) for line in lines)
+
+
+def test_doctor_reports_every_source_that_did_find_files(indexed):
+    lines = query.doctor(indexed, ("transcript", "audit", "state", "statusline"))
+    assert not any("looked and found none" in line for line in lines)
+
+
 def test_a_session_reports_its_files_agents_and_undated_records(indexed):
     found = query.session(indexed, SESSION)
     assert {f["source_kind"] for f in found["files"]} == {"transcript"}

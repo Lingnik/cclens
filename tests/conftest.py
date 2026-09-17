@@ -170,3 +170,18 @@ def indexed(cfg: config.Config):
     db = index.connect(cfg.db_path)
     yield db
     db.close()
+
+
+@pytest.fixture
+def transcripts_only(claude_home: Path, tmp_path: Path):
+    """What a host with no tool hooks looks like: transcripts and nothing else."""
+    cfg = config.from_env({
+        "HOME": str(tmp_path),
+        "CCLENS_CLAUDE_HOME": f"test={claude_home}",
+        "CCLENS_DB": str(tmp_path / "bare.db"),
+        "CCLENS_EXCLUDE": "audit,state,statusline",
+    })
+    index.index_all(cfg)
+    db = index.connect(cfg.db_path)
+    yield db
+    db.close()
