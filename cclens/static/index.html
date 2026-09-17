@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>cclens</title>
+<link rel="icon" href="favicon.svg">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="#/sessions">cclens</a>
+  <nav class="tabs" id="nav">
+    <a href="#/sessions" data-route="sessions">Sessions</a>
+    <a href="#/hooks" data-route="hooks">Hooks</a>
+    <a href="#/search" data-route="search">Search</a>
+    <a href="#/stats" data-route="stats">Stats</a>
+  </nav>
+  <form class="omni" id="omni" autocomplete="off">
+    <input type="search" id="omni-input" placeholder="Search everything    /" aria-label="Search">
+  </form>
+  <div class="freshness" id="freshness" title="index freshness"></div>
+</header>
+
+<main class="frame">
+  <aside class="rail" id="rail"></aside>
+  <section class="content" id="content"></section>
+  <aside class="inspector" id="inspector" hidden></aside>
+</main>
+
+<div class="toast" id="toast" hidden></div>
+<script type="module" src="app.js"></script>
+</body>
+</html>

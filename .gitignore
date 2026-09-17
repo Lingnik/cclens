@@ -1,0 +1,26 @@
+# The index and anything read out of it. Never commit log data.
+*.db
+*.db-wal
+*.db-shm
+data/
+out/
+*.png
+*.jsonl
+
+# Python
+__pycache__/
+*.py[cod]
+.venv*/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+
+# Editors and hosts
+.DS_Store
+.idea/
+.vscode/
+
+# Produced by running the dev tools; the project has no runtime dependencies.
+uv.lock
